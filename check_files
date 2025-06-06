@@ -1,0 +1,45 @@
+#!/bin/bash
+source /etc/file_client/config.sh
+
+aula="$(hostname | cut -c 1-3)"
+host="$(hostname)"
+#local_ssh="root@$(ip a | egrep "inet\b" | grep -v 127 | awk -F " " '{print $2}' | cut -d "/" -f1)"
+
+
+ssh -q -i /root/.ssh/id_rsa ${server_ip} "
+  for i in \$(ls $map_files_dir); do
+	  q=0
+      cur_date=\$(echo \$i | cut -d \"_\" -f2)
+#      if grep -q \"\b$aula\b\" ${map_files_dir}\$i; then
+#          if ! grep -q \"\b$host\b\" ${map_files_dir}\$i; then
+#              sed -i \"s/\(\b$aula\b\)/\1 $host/\" ${map_files_dir}\$i
+#              echo ${torrent_files_dir}*\$cur_date*
+#          fi
+#      if grep -q ${host} ${map_files_dir}\$i; then
+		while -r linea; do
+		   if [[ $linea = $host ]]; then
+			   q=$((q+1))
+			   if [ \$(grep -o \"$host\" ${map_files_dir}\$i) -lt 2 ] ; then
+                   echo ${host} >> ${map_files_dir}\$i
+                   echo ${torrent_files_dir}*\$cur_date*
+			   fi
+           fi
+		done < ${map_files_dir}\$i
+#      fi
+  done
+" | xargs -I {} scp -q -i $HOME/.ssh/id_rsa "${server_ip}:{}" $torrent_dir
+
+for x in $(ls $torrent_dir); do
+	ssh -q -i /root/.ssh/id_rsa ${server_ip} "
+	if ! ls ${torrent_files_dir}${x}; then
+		echo 2
+		continue
+	elif ! ps aux | grep ${x}; then
+		echo 1
+		continue
+	elif ps aux | grep ${x}; then
+		echo 0
+	fi
+	" xargs -I {} echo {}
+done
+
