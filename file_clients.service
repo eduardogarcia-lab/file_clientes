@@ -1,0 +1,14 @@
+[Unit]
+Description=Filegator autotorrent download service
+After=network.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/etc/file_clients/check_files
+RemainAfterExit=true
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
