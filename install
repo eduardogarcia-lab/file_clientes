@@ -1,11 +1,4 @@
 mv file_clients.service /lib/systemd/system/file_clients.service
-mkdir /var/log/file_clients/
 cp config.sh config.sh.template
-echo '{
-     "rpc-enabled": true,
-     "rpc-authentication-required": false,
-     "lpd-enabled": true,
-     "utp-enabled": false
-}' > /etc/file_clients/torrents
 systemctl enable file_clients
 systemctl start file_clients

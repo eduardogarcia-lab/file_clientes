@@ -1,50 +1,91 @@
 #!/bin/bash
 source /etc/file_clients/config.sh
 
+##########################################################################################################
+#
+#    Nombre: check_files
+#    Descripcion: Busca los ficheros .torrent del servidor, en caso necesario los descarga y los transmite
+#    Autor: Eduardo García (edugarcia.fpc3@gmail.com)
+#    Fecha de creación: 2025-06-09
+#    Versión: 1.0
+#    Última modificación: 2025-06-11
+#
+##########################################################################################################
+
+#Variable que almacena el hostname de la máquina
 host="$(hostname)"
 
-#if [ ! -e "${torrent_dir}settings.json" ]; then
-#	echo '{
-#	"rpc-enabled": true,
-#	"rpc-authentication-required": false,
-#    "lpd-enabled": true,
-#    "utp-enabled": false
-#	}' > "${torrent_dir}settings.json"
-#fi
+mkdir -p $torrent_dir
+mkdir -p $downloads_dir
 
+#Se conecta al servidor, y dentro de este busca en todos los mapas de torrent una igualación a su nombre para comprobar si tiene que descargar el respectivo torrent
+#Para cada mapa lo mira línea a línea y comprueba si esa línea es coincidente con su hostname. Ej: si A1* = A11PC11 (si que lo sería así que descargaría el torrent)
+#Pero en caso de que encuentre dos igualaciones, asumiría que ya se ha descargado ese torrent, asi que no haría nada. Por tanto si es coincidente y solo hay 1 coincidencia
+#Escribe su hostname en el mapa
 ssh -q -i /root/.ssh/id_rsa ${server_ip} "
 	for i in \$(ls $map_files_dir); do
 		q=0
 		cur_date=\$(echo \$i | cut -d \"_\" -f2)
 		while read -r linea; do
-			if [[ ${host} == \$linea ]]; then
+			if [[ \"${host}\" == \$linea ]]; then
 				q=\$((q + 1))
 			fi
 		done < ${map_files_dir}\$i
 
 		if [ \$q -eq 1 ]; then
 			echo \"$host\" >> \"${map_files_dir}\$i\"
-			echo \"${torrent_files_dir}*\${cur_date}*\"
+			echo \"${torrent_files_dir}\${cur_date}.torrent\"
 		fi
 done
-" | xargs -I {} scp -q -i /root/.ssh/id_rsa "${server_ip}:{}" ${torrent_dir}.
+" | xargs -I {} scp -q -i /root/.ssh/id_rsa "${server_ip}:{}" ${torrent_dir}. && echo "[$(date "+%Y-%m-%d %H:%M:%S")] Copiando fichero a $torrent_dir"
 
+#Aquí busca todos los .torrent del fichero denominado de torrents. Por cada uno que encuentre, crea un directorio con el mismo nombre sin el .torrent
+#Si ya esta el directorio comprueba si tiene las configuraciones por defecto. Si las tiene pasa a la siguiente iteración, si no, lo mete en el fichero settings.json
+for j in $(ls $torrent_dir | grep ".torrent" | cut -d'.' -f 1); do
+	mkdir -p "${torrent_dir}${j}" && echo "[$(date "+%Y-%m-%d %H:%M:%S")] Creada la carpeta "${torrent_dir}${j}""
+	if [ ! -e "${torrent_dir}${j}/settings.json" ]; then
+		echo '{
+		"rpc-enabled": true,
+		"rpc-authentication-required": false,
+    	"lpd-enabled": true,
+    	"utp-enabled": false
+		}' > "${torrent_dir}${j}/settings.json"
+		echo "[$(date "+%Y-%m-%d %H:%M:%S")] Creado el fichero de configuración ${torrent_dir}${j}/settings.json" 
+	fi
+done
+
+
+#Este bucle busca los torrents que hay en el equipo y los busca en el servidor. Si no los encuentra los borra. Si los encuentra pero no esta activo
+#Simplemente pasa a la siguiente iteración. Por último, en caso de que lo encuentre y este activo, empieza el comando transmission-cli, ya sea
+#Para descargar o para transmitir al resto de la red
 for x in $(ls $torrent_dir | grep ".torrent" ); do
+	echo ${x}
 	ssh -q -i /root/.ssh/id_rsa ${server_ip} "
 	if ! ls ${torrent_files_dir} | grep -q $x ; then
 		echo ${x}_2
-	elif ! ps aux | grep -v grep | grep -q ${x} ; then
+	elif ! pgrep -f "${x}" > /dev/null; then
 		echo ${x}_1
-	elif ps aux | grep -v grep | grep -q ${x} ; then
+	elif pgrep -f "${x}" > /dev/null; then
 		echo ${x}_0
 	fi
 	"
-done | xargs -I {} bash -c 'if [[ {} == *_2 ]]; then
-	echo {}
-	rm '${torrent_dir}'$(echo {} | cut -d "_" -f 1)
-elif [[ {} == *_1 ]]; then
-	echo "el fichero $(echo {} | cut -d "_" -f 1) no está activo, no se hace nada"
-elif [[ {} == *_0  ]]; then
-	echo {}
-	transmission-cli -w '${downloads_dir}' -g '${torrent_dir}' '${torrent_dir}'$(echo {} | cut -d "_" -f 1) #> /dev/null 2>&1 &	
-fi'
+done | xargs -I {} bash -c '
+  file="{}"
+  torrent_base=$(echo "$file" | cut -d"_" -f1)
+  torrent_core=$(echo "$file" | cut -d"_" -f1 | cut -d"." -f1)
+  case "$file" in
+    *_2)
+      rm -f "${torrent_dir}${torrent_base}"
+	  rm -rf "${torrent_dir}${torrent_core}"
+	  echo "[$(date "+%Y-%m-%d %H:%M:%S")] Borrados ${torrent_dir}${torrent_core} y ${torrent_dir}${torrent_base}" 
+      ;;
+    *_1)
+      echo "El fichero $base no está activo, no se hace nada" | tee -a $torrent_log 
+      ;;
+    *_0)
+      echo "[$(date "+%Y-%m-%d %H:%M:%S")] Iniciando el torrent '${torrent_dir}'${torrent_base}" 
+	  transmission-cli -w "'${downloads_dir}'" -g "'${torrent_dir}'${torrent_core}" "'${torrent_dir}'${torrent_base}" &>/dev/null &
+      ;;
+  esac
+'
+

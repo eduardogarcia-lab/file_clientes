@@ -15,6 +15,3 @@ torrent_dir="/etc/file_clients/torrents/"
 #DIRECTORIO DONDE SE ALMACENAN LOS FICHEROS DESCARGADOS
 downloads_dir="/etc/file_clients/downloads/"
 
-#TIEMPO DE ESPERA ENTRE EJECUCIONES ('s' para segundos, 'm' minutos, 'h' horas, 'd' dias)
-wait_time="15 m"
-

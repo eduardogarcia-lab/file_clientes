@@ -1,6 +1,12 @@
-Este es un servicio complementario para el proyecto FileGator de alcalbg (https://github.com/filegator/filegator). Esta es la parte cliente, por tanto solo necesitaras el servicio SSH cliente y que tu usuario root tenga clave pública/privada añadida en el servidor SSH que tiene el FileGator.
+Este es un servicio complementario para el proyecto FileGator de alcalbg (https://github.com/filegator/filegator). Esta es la parte cliente, por tanto solo necesitaras el servicio SSH cliente, que tu usuario root tenga clave pública/privada añadida en el servidor SSH que tiene el FileGator y cambiarle el hostname a tu máquina al formato dado (AXXPCYY).
 
 Además tendras que ejecutar estos comandos:
+
+ssh-keygen -t rsa (como root)
+
+ssh-copy-id -i /root/.ssh/id_rsa.pub root@IP_DEL_SERVIDOR
+
+apt install transmission-cli
 
 cd /etc/
 
